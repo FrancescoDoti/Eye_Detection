@@ -1,18 +1,18 @@
-from object_detector import ObjectDetector
-from gaze_tracker import GazeTracker
-from gaze_driven_detection import GazeDrivenObjectDetection
+from object_detector import ObjectDetectorCV
+from gaze_tracker import GazeTracker  
+from gaze_driven_detection import GazeDrivenObjectDetectionCV
 from user_profile import UserProfile
-from context_aware_detection import ContextAwareObjectDetection
+from context_aware_detection import ContextAwareObjectDetectionCV
 from evaluation import evaluate_real_time_performance, run_user_study
 
 def main_enhanced():
-    """Main function to run the enhanced context-aware object detection system"""
-    print("Context-Aware Gaze-Driven Object Detection for Enhanced Accessibility")
+    """Main function to run the enhanced context-aware object detection system using classical CV"""
+    print("Context-Aware Gaze-Driven Object Detection for Enhanced Accessibility (Classical CV)")
     print("====================================================================")
     
-    # Create the system
-    system = ContextAwareObjectDetection(
-        confidence_threshold=0.5,
+    # Create the system using the classical implementation
+    system = ContextAwareObjectDetectionCV(
+        min_area=500,         # Replace deep learning detection with contour-based detection
         gaze_influence=0.7
     )
     
@@ -21,17 +21,18 @@ def main_enhanced():
     user.add_preferred_object("book")
     user.add_preferred_object("laptop")
     
-    # Set user and context
+    # Set user profile and context information
     system.set_user(user)
     system.set_context("living_room")
     
-    # Set video source
-    video_source = 0  # Webcam
+    # Set video source (0 for webcam, or path to a video file)
+    video_source = 0  
     
-    # Run the system
+    # Run the system (this method should open the video stream, process frames,
+    # and display results using classical CV methods)
     system.run(video_source)
     
-    # Run evaluation
+    # Run evaluation if the system collects performance metrics
     performance = evaluate_real_time_performance(
         system.detection_times, 
         system.prioritization_times
@@ -41,7 +42,7 @@ def main_enhanced():
     for key, value in performance.items():
         print(f"  {key}: {value}")
     
-    # Simulate user study
+    # Simulate a user study (this function may simulate responses or gather user feedback)
     study_results = run_user_study()
     
     print("\nUser Study Results:")
@@ -52,18 +53,17 @@ def main_enhanced():
 
 
 def main():
-    """Main function to run the gaze-driven object detection system"""
-    print("Gaze-Driven Object Detection for Enhanced Accessibility")
+    """Main function to run the gaze-driven object detection system using classical CV"""
+    print("Gaze-Driven Object Detection for Enhanced Accessibility (Classical CV)")
     print("======================================================")
     
-    # Create the system
-    system = GazeDrivenObjectDetection(
-        confidence_threshold=0.5,  # Object detection confidence threshold
-        gaze_influence=0.7         # How much gaze affects prioritization
+    # Create the system using the classical implementation
+    system = GazeDrivenObjectDetectionCV(
+        min_area=500,         # Use contour-based detection instead of deep learning
+        gaze_influence=0.7
     )
     
-    # Set video source
-    # 0 for webcam, or provide path to a video file
+    # Set video source (0 for webcam, or provide a video file path)
     video_source = 0
     
     # Run the system
@@ -74,5 +74,5 @@ def main():
 
 if __name__ == "__main__":
     # Uncomment one of the following lines to run the desired version
-    main()  # Basic version
-    # main_enhanced()  # Enhanced version with context awareness
+    main()            # Basic version using classical gaze-driven detection
+    # main_enhanced()  # Enhanced version with added context awareness

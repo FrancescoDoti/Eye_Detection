@@ -1,23 +1,28 @@
 import time
-from gaze_driven_detection import GazeDrivenObjectDetection
+import numpy as np
+from gaze_driven_detection import GazeDrivenObjectDetectionCV  # Classical CV version
 
-class ContextAwareObjectDetection(GazeDrivenObjectDetection):
+class ContextAwareObjectDetectionCV(GazeDrivenObjectDetectionCV):
     def __init__(self, window_name="Context-Aware Object Detection", 
-                 confidence_threshold=0.5, gaze_influence=0.7):
+                 min_area=500, gaze_influence=0.7):
         """
-        Initialize the context-aware object detection system
+        Initialize the context-aware object detection system using classical CV methods
         
         Args:
-            window_name (str): Name of the display window
-            confidence_threshold (float): Threshold for object detection confidence
-            gaze_influence (float): How much gaze affects object prioritization (0-1)
+            window_name (str): Name of the display window.
+            min_area (int): Minimum area threshold for detecting objects via classical methods.
+            gaze_influence (float): How much gaze affects object prioritization (0-1).
         """
-        super().__init__(window_name, confidence_threshold, gaze_influence)
+        # For classical methods, detection confidence is often a dummy constant (e.g. 1.0)
+        super().__init__(window_name, confidence_threshold=1.0, gaze_influence=gaze_influence)
         
-        # Current context (e.g., "driving", "kitchen", "living_room")
+        # Classical detector parameter
+        self.min_area = min_area
+        
+        # Set the default context (e.g., "driving", "kitchen", "living_room")
         self.current_context = "general"
         
-        # Context-specific object importance
+        # Define context-specific object importance scores
         self.context_importance = {
             "driving": {
                 "person": 1.0,
@@ -52,18 +57,21 @@ class ContextAwareObjectDetection(GazeDrivenObjectDetection):
                 "chair": 0.6,
                 "book": 0.5
             },
-            "general": {}  # Default context with no specific importance
+            "general": {}  # Default context with no specific importance settings
         }
         
-        # Current user profile
+        # Current user profile (to incorporate user preferences)
         self.current_user = None
+        
+        # List to track prioritization processing times for evaluation
+        self.prioritization_times = []
     
     def set_context(self, context):
         """
-        Set the current context
+        Set the current context.
         
         Args:
-            context (str): Context name
+            context (str): Context name (e.g., "driving", "kitchen", "living_room").
         """
         if context in self.context_importance:
             self.current_context = context
@@ -74,89 +82,86 @@ class ContextAwareObjectDetection(GazeDrivenObjectDetection):
     
     def set_user(self, user):
         """
-        Set the current user
+        Set the current user.
         
         Args:
-            user (UserProfile): User profile
+            user (UserProfile): User profile object.
         """
         self.current_user = user
         print(f"User set to: {user.name}")
     
     def get_context_importance(self, class_name):
         """
-        Get context-specific importance for an object class
+        Retrieve the context-specific importance for an object class.
         
         Args:
-            class_name (str): Class name of the object
+            class_name (str): Name of the object class.
             
         Returns:
-            float: Importance score (0-1)
+            float: Importance score between 0 and 1 (default is 0.5 if not specified).
         """
-        if self.current_context in self.context_importance:
-            return self.context_importance[self.current_context].get(class_name, 0.5)
-        return 0.5  # Neutral if context not found
+        return self.context_importance.get(self.current_context, {}).get(class_name, 0.5)
     
     def prioritize_detections(self, detections, gaze_heatmap):
         """
-        Prioritize detections based on gaze heatmap, context, and user profile
+        Prioritize detections based on the gaze heatmap, context importance, and user preferences.
         
         Args:
-            detections (list): List of detections from object detector
-            gaze_heatmap (numpy.ndarray): Gaze heatmap
+            detections (list): List of detections from the classical object detector.
+                               Each detection is [x1, y1, x2, y2, confidence, class_id, class_name].
+            gaze_heatmap (numpy.ndarray): Gaze heatmap as a 2D array of intensity values.
             
         Returns:
-            list: Prioritized detections
+            list: Detections sorted by the combined score (descending order).
         """
         start_time = time.time()
-        
         prioritized_detections = []
         
         for detection in detections:
             x1, y1, x2, y2, score, class_id, class_name = detection
             
-            # Calculate box center
+            # Calculate the center of the detection box
             center_x = (x1 + x2) / 2
             center_y = (y1 + y2) / 2
             
-            # Get gaze attention at center of box
+            # Get gaze attention at the center (safeguarding for bounds)
             center_x_int, center_y_int = int(center_x), int(center_y)
-            if 0 <= center_y_int < gaze_heatmap.shape[0] and 0 <= center_x_int < gaze_heatmap.shape[1]:
+            if (0 <= center_y_int < gaze_heatmap.shape[0] and 
+                0 <= center_x_int < gaze_heatmap.shape[1]):
                 gaze_attention = gaze_heatmap[center_y_int, center_x_int]
             else:
                 gaze_attention = 0
             
-            # Get context importance
+            # Retrieve context importance for the detected object's class
             context_importance = self.get_context_importance(class_name)
             
-            # Get user preference (if available)
-            user_preference = 0.5  # Neutral by default
+            # Retrieve user preference score (default to 0.5 if no user profile is set)
+            user_preference = 0.5
             if self.current_user:
                 user_preference = self.current_user.get_object_preference_score(class_name)
-                
-                # Boost score for preferred objects
                 if self.current_user.is_preferred_object(class_name):
                     user_preference = max(user_preference, 0.8)
             
-            # Combine scores
-            # - Detection confidence: how confident the model is about the detection
-            # - Gaze attention: how close the object is to where the user is looking
-            # - Context importance: how important the object is in the current context
-            # - User preference: how much the user has interacted with this type of object
-            
+            # Combine the factors:
+            #  - 30% weight for the detection confidence (often a constant value in classical detection)
+            #  - 40% weight for gaze attention (proximity to user gaze)
+            #  - 20% weight for context importance (importance of object in the current scene)
+            #  - 10% weight for user preference (user-specific boosting)
             combined_score = (
-                0.3 * score +                # Detection confidence
-                0.4 * gaze_attention +       # Gaze attention
-                0.2 * context_importance +   # Context importance
-                0.1 * user_preference        # User preference
+                0.3 * score +
+                0.4 * gaze_attention +
+                0.2 * context_importance +
+                0.1 * user_preference
             )
             
-            # Update detection with combined score
+            # Update the detection with the combined score
             prioritized_detection = [x1, y1, x2, y2, combined_score, class_id, class_name]
             prioritized_detections.append(prioritized_detection)
         
-        # Sort detections by combined score (descending)
-        prioritized_detections.sort(key=lambda x: x[4], reverse=True)
+        # Sort detections by the combined score in descending order
+        prioritized_detections.sort(key=lambda d: d[4], reverse=True)
         
+        # Record the processing time for prioritization
         self.prioritization_times.append(time.time() - start_time)
         
         return prioritized_detections
