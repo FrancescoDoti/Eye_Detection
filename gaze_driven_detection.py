@@ -1,10 +1,10 @@
 import cv2
 import time
 import numpy as np
-from object_detector import ObjectDetectorCV  
+from object_detector import ObjectDetectorCV  # Classical CV version
 from gaze_tracker import GazeTracker
 
-class GazeDrivenObjectDetection:
+class GazeDrivenObjectDetectionCV:
     def __init__(self, window_name="Gaze-Driven Object Detection", 
                  confidence_threshold=1.0, gaze_influence=0.7):
         """
