@@ -1,87 +1,78 @@
 import cv2
-import time
-import torch
-import torchvision
 import numpy as np
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
-from torchvision.transforms import functional as F
 
-
-class ObjectDetector:
-    def __init__(self, confidence_threshold=0.5):
+class ObjectDetectorCV:
+    def __init__(self, min_area=500):
         """
-        Initialize the object detector with a pre-trained model
+        Initialize the object detector without deep learning.
         
         Args:
-            confidence_threshold (float): Threshold for detection confidence
+            min_area (int): Minimum area in pixels to consider a contour as a valid detection.
         """
-        # Load a pre-trained Faster R-CNN model
-        self.model = fasterrcnn_resnet50_fpn(pretrained=True)
-        self.model.eval()  # Set to evaluation mode
-        
-        # Move the model to GPU if available
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
-        
-        # Set confidence threshold for detections
-        self.confidence_threshold = confidence_threshold
-        
-        # COCO dataset class names
-        self.classes = [
-            '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-            'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
-            'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-            'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
-            'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-            'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-            'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-            'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-            'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
-            'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
-            'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
-            'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
-        ]
-    
+        self.min_area = min_area
+
     def detect(self, image):
         """
-        Detect objects in the given image
+        Detect objects in the given image using classical image processing techniques.
         
         Args:
-            image (numpy.ndarray): Input image in BGR format (OpenCV)
+            image (numpy.ndarray): Input image in BGR format (as read by OpenCV)
             
         Returns:
             list: List of detections, each containing [x1, y1, x2, y2, confidence, class_id, class_name]
         """
-        # Convert BGR to RGB
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Convert image to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Convert to tensor and normalize
-        image_tensor = F.to_tensor(image_rgb)
+        # Apply Gaussian blur to reduce noise and help edge detection
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # Add batch dimension
-        image_tensor = image_tensor.unsqueeze(0).to(self.device)
+        # Perform Canny edge detection
+        edges = cv2.Canny(blurred, threshold1=50, threshold2=150)
         
-        # Perform inference
-        with torch.no_grad():
-            predictions = self.model(image_tensor)
+        # Optionally dilate edges to close gaps
+        dilated = cv2.dilate(edges, None, iterations=1)
         
-        # Extract results
-        boxes = predictions[0]['boxes'].cpu().numpy()
-        scores = predictions[0]['scores'].cpu().numpy()
-        labels = predictions[0]['labels'].cpu().numpy()
+        # Find contours in the edge map
+        contours, _ = cv2.findContours(dilated.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Filter by confidence threshold
-        mask = scores >= self.confidence_threshold
-        boxes = boxes[mask]
-        scores = scores[mask]
-        labels = labels[mask]
-        
-        # Format detections
         detections = []
-        for box, score, label in zip(boxes, scores, labels):
-            x1, y1, x2, y2 = box
-            class_id = label
-            class_name = self.classes[class_id]
-            detections.append([x1, y1, x2, y2, score, class_id, class_name])
+        for cnt in contours:
+            # Filter out small contours based on a minimum area to reduce noise
+            if cv2.contourArea(cnt) < self.min_area:
+                continue
+            
+            # Get the bounding box coordinates for each contour
+            x, y, w, h = cv2.boundingRect(cnt)
+            
+            # Here we assign a dummy confidence value
+            confidence = 1.0
+            
+            # Since we don't have a classifier, we label all detections as generic "object"
+            class_id = 0
+            class_name = "object"
+            
+            detections.append([x, y, x + w, y + h, confidence, class_id, class_name])
         
         return detections
+
+# Example usage:
+if __name__ == "__main__":
+    # Read an image from file
+    image = cv2.imread("path_to_your_image.jpg")
+    
+    # Initialize our classical object detector
+    detector = ObjectDetectorCV(min_area=500)
+    
+    # Perform detection
+    detections = detector.detect(image)
+    
+    # Draw bounding boxes on the image
+    for (x1, y1, x2, y2, conf, class_id, class_name) in detections:
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(image, class_name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    # Display the result
+    cv2.imshow("Detections", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
