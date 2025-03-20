@@ -58,10 +58,7 @@ def main():
     print("======================================================")
     
     # Create the system using the classical implementation
-    system = GazeDrivenObjectDetectionCV(
-        min_area=500,         # Use contour-based detection instead of deep learning
-        gaze_influence=0.7
-    )
+    system = GazeDrivenObjectDetectionCV()
     
     # Set video source (0 for webcam, or provide a video file path)
     video_source = 0
