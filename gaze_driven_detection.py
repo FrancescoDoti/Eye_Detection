@@ -118,7 +118,7 @@ class GazeDrivenObjectDetectionCV:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
         # Draw the eye (gaze) position.
-        gaze_x, gaze_y = self.gaze_tracker.get_eye_position()
+        gaze_x, gaze_y = self.gaze_tracker.get_gaze_position()
         cv2.circle(visualization, (gaze_x, gaze_y), 10, (255, 0, 0), -1)
         
         return visualization

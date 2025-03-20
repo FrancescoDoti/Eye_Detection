@@ -32,6 +32,9 @@ class GazeTracker:
         """
         return self.gaze_position
     
+    def get_eye_position(self):
+        return self.get_gaze_position()
+    
     def generate_gaze_heatmap(self, image_shape, sigma=50):
         """
         Generate a gaze heatmap based on current gaze position
