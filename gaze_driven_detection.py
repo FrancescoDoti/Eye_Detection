@@ -24,11 +24,11 @@ class GazeDrivenObjectDetectionCV:
         # Initialize the classical object (eye) detector with the provided min_area.
         self.object_detector = ObjectDetectorCV(min_area=self.min_area)
         
-        # Initialize the display window.
+        # Create the display window.
         cv2.namedWindow(window_name)
         
-        # Initialize the gaze (eye) tracker.
-        self.gaze_tracker = GazeTracker(window_name)
+        # Initialize the gaze tracker (using mouse as proxy).
+        self.gaze_tracker = GazeTracker(window_name, use_mouse=True)
         
         # Performance metrics.
         self.detection_times = []
@@ -79,7 +79,8 @@ class GazeDrivenObjectDetectionCV:
     
     def process_frame(self, frame):
         """
-        Process a single frame by detecting eyes, generating a gaze heatmap, and visualizing results.
+        Process a single frame by detecting objects, generating a gaze heatmap, 
+        and visualizing results based on whether the gaze (mouse) is inside a detection.
         
         Args:
             frame (numpy.ndarray): Input frame.
@@ -87,15 +88,15 @@ class GazeDrivenObjectDetectionCV:
         Returns:
             numpy.ndarray: Frame with visualized detections and gaze information.
         """
-        # Create a copy of the frame for visualization.
+        # Copy frame for visualization.
         visualization = frame.copy()
         
-        # Detect eyes using the classical detector.
+        # Detect objects using the classical detector.
         start_time = time.time()
         detections = self.object_detector.detect(frame)
         self.detection_times.append(time.time() - start_time)
         
-        # Get the gaze heatmap from the gaze tracker.
+        # Generate gaze heatmap.
         gaze_heatmap = self.gaze_tracker.generate_gaze_heatmap(frame.shape)
         
         # Prioritize detections based on the gaze heatmap.
@@ -105,27 +106,28 @@ class GazeDrivenObjectDetectionCV:
         heatmap_visualization = cv2.applyColorMap((gaze_heatmap * 255).astype(np.uint8), cv2.COLORMAP_JET)
         visualization = cv2.addWeighted(visualization, 0.7, heatmap_visualization, 0.3, 0)
         
-        # Visualize detections with colors indicating priority.
-        colors = [(0, 0, 255), (0, 165, 255), (0, 255, 255), (0, 255, 0), (255, 255, 0)]
+        # Retrieve the current gaze (mouse) position.
+        gaze_x, gaze_y = self.gaze_tracker.get_gaze_position()
         
+        # Only draw detection boxes if the gaze pointer lies within them.
+        colors = [(0, 0, 255), (0, 165, 255), (0, 255, 255), (0, 255, 0), (255, 255, 0)]
         for i, detection in enumerate(prioritized_detections):
             x1, y1, x2, y2, score, class_id, class_name = detection
-            
-            color = colors[min(i, len(colors) - 1)]
-            cv2.rectangle(visualization, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-            label = f"{class_name}: {score:.2f}"
-            cv2.putText(visualization, label, (int(x1), int(y1) - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            if x1 <= gaze_x <= x2 and y1 <= gaze_y <= y2:
+                color = colors[min(i, len(colors) - 1)]
+                cv2.rectangle(visualization, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                label = f"{class_name}: {score:.2f}"
+                cv2.putText(visualization, label, (int(x1), int(y1) - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
-        # Draw the eye (gaze) position.
-        gaze_x, gaze_y = self.gaze_tracker.get_gaze_position()
+        # Draw the current gaze position as a circle.
         cv2.circle(visualization, (gaze_x, gaze_y), 10, (255, 0, 0), -1)
         
         return visualization
     
     def run(self, source=0):
         """
-        Run the gaze-driven object detection (eye tracking) system.
+        Run the gaze-driven object detection system.
         
         Args:
             source: Video source (0 for webcam, or path to a video file).
